@@ -1,15 +1,25 @@
 from django.db import models
 
-# Create your models here.
-class Priority(models.TextChoices):
-    LOW = 'LOW'
-    NORMAL = 'NORMAL'
-    HIGH = 'HIGH'
+class Sleep(models.Model):
+    id = models.UUIDField(primary_key=True)
+    end_at = models.DateTimeField(null=True)
+    start_at = models.DateTimeField(null=True)
+    user_id = models.UUIDField(db_index=True)
 
-class Todo(models.Model):
+class User(models.Model):
+    id = models.UUIDField(primary_key=True)
+    bmi = models.FloatField(null=True)
+    
+class Exercise(models.Model):
+    id = models.UUIDField(primary_key=True)
     name = models.CharField(max_length=255)
-    priority = models.CharField(max_length=10, choices=Priority.choices)
-    completed_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True)
+    target = models.CharField(max_length=255)
+    user_id = models.UUIDField(db_index=True)
 
-    def __str__(self):
-        return self.name
+class Protein(models.Model):
+    id = models.UUIDField(primary_key=True)
+    name = models.CharField(max_length=255)
+    grams = models.FloatField()
+    completed_at = models.DateTimeField(null=True)
+    user_id = models.UUIDField(db_index=True)
