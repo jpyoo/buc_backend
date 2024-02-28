@@ -68,15 +68,17 @@ conn = psycopg2.connect(
 # Create a cursor
 cur = conn.cursor()
 
-
 # Fetch data from DynamoDB and insert into PostgreSQL tables
 for table_name in [USER_TABLE_NAME]:
     response = dynamodb_client.scan(TableName=table_name)
     items = response['Items']
     for item in items:
+        user_id = item.get('id', '')  # Assuming 'id' is the primary key in DynamoDB
+        bmi = item.get('BMI', '')  # Assuming 'BMI' is an attribute in DynamoDB
+        print(user_id['S'], bmi, type(bmi))
         # Insert item into PostgreSQL table
         # Assuming the structure of DynamoDB items and PostgreSQL tables are compatible
         cur.execute(
-            f"INSERT INTO graphapi_user (id, bmi) VALUES (%s, %s, ...)",
-            (item['id'], item['BMI'])
+            f"INSERT INTO graphapi_user (id, bmi) VALUES (%s, %s)",
+            (user_id['S'], float(bmi['N']))
         )
