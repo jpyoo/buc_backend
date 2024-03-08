@@ -17,6 +17,16 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
+from graphapi import views as graphapi_views
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    path('get_items_by_user/', graphapi_views.get_items_by_user, name='get_items_by_user'),
+    path('print_all_items/', graphapi_views.print_all_items, name='print_all_items'),
+    path('import_user_from_aws/', graphapi_views.import_user_from_aws, name='import_user_from_aws'),
+    path('get_weekly_items_by_user/', graphapi_views.get_weekly_items_by_user, name='get_weekly_items_by_user'),
+    # Define other URL patterns for additional API endpoints
 ]
+
+

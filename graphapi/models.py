@@ -2,7 +2,7 @@ from django.db import models
 
 class Sleep(models.Model):
     id = models.CharField(primary_key=True)
-    end_at = models.DateTimeField(null=True)
+    completed_at = models.DateTimeField(null=True)
     start_at = models.DateTimeField(null=True)
     user_id = models.CharField(db_index=True)
 
