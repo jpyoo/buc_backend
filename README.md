@@ -229,26 +229,7 @@ def import_protein_from_aws():
     {'completedAt': '02/22/2024, 21:37:35', 'id': 'pr5', 'name': 'shake', 'grams': Decimal('10'), 'userID': 'user4'}
     {'completedAt': '02/22/2024, 21:37:17', 'id': 'pr4', 'name': 'burger', 'grams': Decimal('25'), 'userID': 'user4'}
     {'id': 'first'}
-
-
-
-    ---------------------------------------------------------------------------
-
-    InvalidDatetimeFormat                     Traceback (most recent call last)
-
-    Cell In[67], line 10
-          7 print(item)
-          8 # Insert item into PostgreSQL table
-          9 # Assuming the structure of DynamoDB items and PostgreSQL tables are compatible
-    ---> 10 cur.execute(
-         11     f"INSERT INTO graphapi_protein (id, name, completed_at, user_id, grams) VALUES (%s, %s, %s, %s, %s)",
-         12     (p_id, name, completedAt, userID, grams)
-         13 )
-         14 conn.commit()
-
-
-    InvalidDatetimeFormat: invalid input syntax for type timestamp with time zone: ""
-    LINE 1: ...ompleted_at, user_id, grams) VALUES ('first', '', '', '', ''...
+```
                                                                  ^
 
 
