@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 MAX_GET_SIZE = 100  # Amazon DynamoDB rejects a get batch larger than 100 items.
 
-aws_acct = 'zirl2v2iw5h7tnbs3wznskuvvm-bulkupcoac'
+aws_acct = '******'
 USER_TABLE_NAME = 'User-' + aws_acct
 EXERCISE_TABLE_NAME = "Exercise-" + aws_acct
 PROTEIN_TABLE_NAME = "Protein-" + aws_acct
