@@ -28,6 +28,9 @@ class DataAPI:
         self.PROTEIN_TABLE_NAME = "Protein-" + AWS_ACCT
         self.SLEEP_TABLE_NAME = "Sleep-" + AWS_ACCT
 
+        # Creating the DynamoDB Table Resource
+        self.dynamodb = boto3.resource('dynamodb', region_name="us-west-1")
+
         # Define PostgreSQL connection parameters
         self.conn = psycopg2.connect(
             dbname="bulkupcoach",
@@ -36,7 +39,8 @@ class DataAPI:
             host="localhost",
             port="5432"
         )
-
+    def testapi(self):
+        return "Hello, World!"
     def setup_routes(self):
         self.app.add_url_rule('/get_items_by_user', 'get_items_by_user', self.get_items_by_user, methods=['GET'])
         self.app.add_url_rule('/print_all_items', 'print_all_items', self.print_all_items, methods=['GET'])
@@ -45,21 +49,26 @@ class DataAPI:
 
     # Example:
     # requests.get(f'{base_url}/get_items_by_user?user_id=user1&table_name=User')
-    def get_items_by_user(self):
-        user_id = request.args.get('user_id')
-        table_name = request.args.get('table_name') + '-' + AWS_ACCT
-        try:
-            response = self.dynamodb_client.query(
-                TableName=table_name,
-                KeyConditionExpression="userID = :uid",
-                ExpressionAttributeValues={
-                    ":uid": {"S": user_id}
-                }
+    def get_items_by_user(self ,user_id, table_name):
+        user_id = user_id
+        table_name = table_name + '-' + AWS_ACCT
+        table = self.dynamodb.Table(table_name)
+        if table_name == self.USER_TABLE_NAME:
+            response = table.query(
+                KeyConditionExpression=Key('id').eq(user_id)
             )
-            items = response['Items']
-            return jsonify(items)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            items = response
+        else:
+            response = table.scan(
+                FilterExpression=Attr('userID').eq(user_id),
+            )
+            items = response
+            # #filter the items by user_id
+            # items = [item for item in items if item['userID'] == user_id]
+
+        # print('response: ', response)
+        # print('items:', items)
+        return items
     
     def get_weekly_items_by_user(self):
         user_id = request.args.get('user_id')
@@ -91,13 +100,12 @@ class DataAPI:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    def print_all_items(self):
+    def print_all_items(self, table_name):
         table_name = request.args.get('table_name') + '-' + AWS_ACCT
+        table = self.dynamodb.Table(table_name)
         try:
             # Query all items from DynamoDB table
-            response = self.dynamodb_client.scan(
-                TableName=table_name
-            )
+            response = table.scan()
             items = response['Items']
             return jsonify(items)
         except Exception as e:
