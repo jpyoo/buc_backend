@@ -334,6 +334,10 @@ def put_sleep_item_aws(item):
     )
 ```
 
+Example usage of Backend Data API, making data transactions.
+![png](dataAPI.png)
+
+
 ## Step 3: Creating Sample data
 We have inserted 
 
