@@ -1,5 +1,3 @@
-# Django backend application for the bulk up coach project
-
 # Bulk Up Coach Backend Configuration
 This Jupyter notebook will demonstrate the backend configuration of Bulk Up Coach's backend server and database configurations and their rationals. Each steps are sorted in the order of progress.
 Configuring, Defining, Creating, and Updating features of the backend can be found in this document.
@@ -32,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 MAX_GET_SIZE = 100  # Amazon DynamoDB rejects a get batch larger than 100 items.
 
-aws_acct = '******'
+aws_acct = 'zirl2v2iw5h7tnbs3wznskuvvm-bulkupcoac'
 USER_TABLE_NAME = 'User-' + aws_acct
 EXERCISE_TABLE_NAME = "Exercise-" + aws_acct
 PROTEIN_TABLE_NAME = "Protein-" + aws_acct
@@ -229,7 +227,26 @@ def import_protein_from_aws():
     {'completedAt': '02/22/2024, 21:37:35', 'id': 'pr5', 'name': 'shake', 'grams': Decimal('10'), 'userID': 'user4'}
     {'completedAt': '02/22/2024, 21:37:17', 'id': 'pr4', 'name': 'burger', 'grams': Decimal('25'), 'userID': 'user4'}
     {'id': 'first'}
-```
+
+
+
+    ---------------------------------------------------------------------------
+
+    InvalidDatetimeFormat                     Traceback (most recent call last)
+
+    Cell In[67], line 10
+          7 print(item)
+          8 # Insert item into PostgreSQL table
+          9 # Assuming the structure of DynamoDB items and PostgreSQL tables are compatible
+    ---> 10 cur.execute(
+         11     f"INSERT INTO graphapi_protein (id, name, completed_at, user_id, grams) VALUES (%s, %s, %s, %s, %s)",
+         12     (p_id, name, completedAt, userID, grams)
+         13 )
+         14 conn.commit()
+
+
+    InvalidDatetimeFormat: invalid input syntax for type timestamp with time zone: ""
+    LINE 1: ...ompleted_at, user_id, grams) VALUES ('first', '', '', '', ''...
                                                                  ^
 
 
@@ -455,7 +472,333 @@ plt.show()
     
 
 
+### 4.4 Observation.
+
+We collected user activity data and calculated the mean sigma of each behavior to obtain the total sigma. By analyzing the distribution of these sigma values, we found that positive expected muscle growth outcomes are rare, occurring in only about 14% of all cases. This suggests that following the recommended guidelines for muscle growth is not always sufficient to achieve positive results due to occasional deviations from optimal behaviors.
+
+
+```python
+cur.execute("select * from e_muscle_grow where user_id = '1'")
+datapoints = cur.fetchall()
+conn.commit()
+columns = ['user_id', 'total_protein_consumed', 'sleep_start_at',
+           'sleep_end_at', 'exercise_target', 'reps', 'weight_lb',
+           'exercise_completed_at']
+
+```
+
+
+```python
+import pandas as pd
+# Create DataFrame
+df = pd.DataFrame(datapoints, columns=columns)
+```
+
+The true mean and the true sigma are supported by academic studies.
+
+
+```python
+mean_protein_grams = 65
+sigma_protein_grams = 7
+
+mean_sleep_hours = 7
+sigma_sleep_hours = 1.2
+
+mean_weight_lb = 50
+sigma_weight_lb = 10
+
+mean_reps = 10
+sigma_reps = 2
+
+# Group data points by exercise_target unique elements in the 'exercise_target' column
+exercise_targets = df['exercise_target'].unique()
+
+# # Get day of the week data points were recorded
+# df['exercise_completed_at'] = pd.to_datetime(df['exercise_completed_at'])
+# df['day_of_week'] = df['exercise_completed_at'].dt.day_name()
+
+# Get normalized sigma values of data points, 'total_protein_consumed', 'sleep_start_at', 'sleep_end_at', 'weight_lb', 'reps'
+normalized_protein_sigma =  (np.array(df['total_protein_consumed']) - mean_protein_grams) / sigma_protein_grams
+normalized_sleep_sigma = (np.array((df['sleep_end_at'] - df['sleep_start_at']).dt.total_seconds() / 3600) - mean_sleep_hours) / sigma_sleep_hours
+normalized_weight_sigma = ((np.array(df['weight_lb']).astype(float) - mean_weight_lb) / sigma_weight_lb)
+normalized_reps_sigma = (np.array(df['reps']) - mean_reps) / sigma_reps
+```
+
 
 ```python
 
+# mean_sigma = np.mean([normalized_protein_sigma, normalized_sleep_sigma, normalized_weight_sigma, normalized_reps_sigma])
+
+#create an empty array with the same length as the number of data points
+positive_scores = np.array([0.0] * len(normalized_protein_sigma))
+negative_scores = np.array([0.0] * len(normalized_protein_sigma))
+
+Y_hat = np.array([0.0] * len(normalized_protein_sigma))
+
+# Loop through the data points and calculate the mean sigma
+for i in range(len(normalized_protein_sigma)):
+    # if sigma is within 1 standard deviation, add to positive_mean_sigma
+    pos, neg = [], []
+    if abs(normalized_protein_sigma[i]) < 1:
+        pos.append(normalized_protein_sigma[i])
+    else:
+        neg.append(abs(normalized_protein_sigma[i]) - 1)
+    if abs(normalized_sleep_sigma[i]) < 1:
+        pos.append(normalized_sleep_sigma[i])
+    else:
+        neg.append(abs(normalized_sleep_sigma[i]) - 1)
+    if abs(normalized_weight_sigma[i]) < 1:
+        pos.append(normalized_weight_sigma[i])
+    else:
+        neg.append(abs(normalized_weight_sigma[i]) - 1)
+    if abs(normalized_reps_sigma[i]) < 1:
+        pos.append(normalized_reps_sigma[i])
+    else:
+        neg.append(abs(normalized_reps_sigma[i]) - 1)
+    if len(pos) > 0:
+        positive_scores[i] = sum(pos)
+    if len(neg) > 0:
+        negative_scores[i] = -sum(neg)
+    Y_hat[i] = (sum(pos) / max(len(pos), 1)) - (sum(neg) / max(len(neg), 1))
 ```
+
+#### Y hat Values before normalization
+
+
+```python
+# Plot Y_hat
+plt.figure(figsize=(10, 6))
+plt.plot(Y_hat, color='blue', marker='o', linestyle='-')
+plt.title('Predicted Y_hat')
+plt.xlabel('Data Points')
+plt.ylabel('Y_hat')
+plt.grid(True)
+plt.show()
+```
+
+
+    
+![png](output_38_0.png)
+    
+
+
+
+```python
+import matplotlib.pyplot as plt
+
+# Define thresholds for positive and negative values
+positive_threshold = 0  # Threshold for positive values
+negative_threshold = 0  # Threshold for negative values
+
+# Plot Y_hat with positive and negative values highlighted
+fig, ax = plt.subplots(figsize=(10, 6))
+for i, y in enumerate(Y_hat):
+    if y > positive_threshold:
+        ax.scatter(i, y, color='green', marker='o', label='Positive' if i == 0 else None)
+    elif y < negative_threshold:
+        ax.scatter(i, y, color='red', marker='o', label='Negative' if i == 0 else None)
+    else:
+        ax.scatter(i, y, color='blue', marker='o', label='Neutral' if i == 0 else None)
+ax.axhline(y=0, color='black', linestyle='--')  # Line at y=0
+ax.set_title('Predicted Y_hat with Positive and Negative Values Highlighted')
+ax.set_xlabel('Data Points')
+ax.set_ylabel('Y_hat')
+ax.legend(['Positive', 'Negative', 'Neutral'], loc='upper right')
+
+plt.grid(True)
+plt.show()
+
+```
+
+
+    
+![png](output_39_0.png)
+    
+
+
+
+```python
+# count positive numbers in Y_hat
+positive_Y_hat = Y_hat[Y_hat > 0]
+print(f"Number of positive numbers in Y_hat: {len(positive_Y_hat)}")
+print('Number of Samples:', len(Y_hat))
+print(f"Percentage of positive numbers in Y_hat: {len(positive_Y_hat) / len(Y_hat) * 100:.2f}%")
+```
+
+    Number of positive numbers in Y_hat: 29
+    Number of Samples: 202
+    Percentage of positive numbers in Y_hat: 14.36%
+
+
+#### Discussion
+
+The observations and findings from our analysis provide valuable insights into the factors influencing muscle growth and the effectiveness of recommended guidelines. Here are some key points for discussion:
+
+Rare Occurrence of Positive Muscle Growth: Our analysis revealed that positive expected muscle growth outcomes are rare, occurring in only about 14% of all cases. This suggests that simply following recommended guidelines for diet, sleep, and exercise may not be sufficient to guarantee positive results. Other factors such as genetics, individual metabolism, and adherence to the guidelines play crucial roles in determining outcomes.
+
+Importance of Consistency and Adherence: While occasional deviations from optimal behaviors are inevitable, our findings underscore the importance of consistency and adherence to recommended guidelines over time. Consistent adherence to a balanced diet, sufficient sleep, and regular exercise is likely to yield better long-term results compared to sporadic compliance.
+
+Role of Personalized Recommendations: Machine learning models trained on user behavior data can provide personalized recommendations tailored to individual needs and preferences. By analyzing patterns in user data, these models can identify areas for improvement and suggest specific adjustments to optimize muscle growth outcomes.
+
+Limitations and Future Directions: Our analysis has limitations, including the assumption of linear relationships between behaviors and muscle growth outcomes. Future research could explore more complex models that capture nonlinear relationships and interactions between variables. Additionally, incorporating real-time feedback and physiological data such as heart rate variability and hormone levels could enhance the accuracy of predictions and recommendations.
+
+### 4.5 Training ML Models
+
+We trained several machine learning models to predict the expected muscle growth based on user behavior. These models include Linear Regression, Gradient Boosting Decision Trees, and Gaussian Naive Bayes. Each model was trained on the normalized sigma values of user behaviors and evaluated using metrics such as Mean Squared Error for regression models and Accuracy for classification models.
+
+
+```python
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+
+# Combine the features into X
+X = np.array([normalized_protein_sigma, normalized_sleep_sigma, normalized_weight_sigma, normalized_reps_sigma]).T
+y = np.array(Y_hat)  # Using Y_hat directly for regression
+
+# Split data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train the linear regression model
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+# Make predictions
+y_pred = model.predict(X_test)
+
+# Evaluate the model
+mse = mean_squared_error(y_test, y_pred)
+print("Mean Squared Error:", mse)
+```
+
+    Mean Squared Error: 0.9274053852472791
+
+
+
+```python
+import matplotlib.pyplot as plt
+
+# Plot y_pred and y_test
+plt.figure(figsize=(10, 6))
+plt.plot(y_test, label='Actual Y_test', color='blue', marker='o', linestyle='-')
+plt.plot(y_pred, label='Predicted Y_pred', color='red', marker='x', linestyle='-')
+plt.title('Actual vs. Predicted Y values')
+plt.xlabel('Data Points')
+plt.ylabel('Y values')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+```
+
+
+    
+![png](output_44_0.png)
+    
+
+
+
+```python
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+
+# Combine the features into X
+X = np.array([normalized_protein_sigma, normalized_sleep_sigma, normalized_weight_sigma, normalized_reps_sigma]).T
+y = np.array(Y_hat)  # Using Y_hat directly for regression
+
+# Split data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train the Gradient Boosting Decision Trees model
+model = GradientBoostingRegressor(random_state=42)
+model.fit(X_train, y_train)
+
+# Make predictions
+y_pred = model.predict(X_test)
+
+# Evaluate the model
+mse = mean_squared_error(y_test, y_pred)
+print("Mean Squared Error:", mse)
+
+```
+
+    Mean Squared Error: 0.16002424019788059
+
+
+
+```python
+# Plot y_pred and y_test
+plt.figure(figsize=(10, 6))
+plt.plot(y_test, label='Actual Y_test', color='blue', marker='o', linestyle='-')
+plt.plot(y_pred, label='Predicted Y_pred', color='red', marker='x', linestyle='-')
+plt.title('Actual vs. Predicted Y values')
+plt.xlabel('Data Points')
+plt.ylabel('Y values')
+plt.legend()
+plt.grid(True)
+plt.show()
+```
+
+
+    
+![png](output_46_0.png)
+    
+
+
+
+```python
+import numpy as np
+from sklearn.naive_bayes import GaussianNB
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import psycopg2
+from datetime import datetime, timedelta
+
+X = np.array([normalized_protein_sigma, normalized_sleep_sigma, normalized_weight_sigma, normalized_reps_sigma]).T
+y = np.array([1 if y > 0 else 0 for y in Y_hat])
+# Split data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Train the Naive Gaussian Bayes model
+model = GaussianNB()
+model.fit(X_train, y_train)
+
+# Make predictions
+y_pred = model.predict(X_test)
+
+# Evaluate the model
+accuracy = accuracy_score(y_test, y_pred)
+print("Accuracy:", accuracy)
+```
+
+    Accuracy: 0.5853658536585366
+
+
+
+```python
+# Plot y_pred and y_test
+plt.figure(figsize=(10, 6))
+plt.plot(y_test, label='Actual Y_test', color='blue', marker='o', linestyle='-')
+plt.plot(y_pred, label='Predicted Y_pred', color='red', marker='x', linestyle='-')
+plt.title('Actual vs. Predicted Y values')
+plt.xlabel('Data Points')
+plt.ylabel('Y values')
+plt.legend()
+plt.grid(True)
+plt.show()
+```
+
+
+    
+![png](output_48_0.png)
+    
+
+
+## 5. Conlusion
+
+
+
+In this project, we demonstrated the feasibility of using machine learning models to predict and analyze muscle growth outcomes based on user behavior data. By leveraging these models, we can provide personalized recommendations to users to optimize their fitness routines and maximize their chances of achieving their muscle growth goals. Additionally, our findings shed light on the importance of consistency and adherence to recommended guidelines for effective muscle growth.
